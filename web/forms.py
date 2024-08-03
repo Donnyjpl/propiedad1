@@ -146,12 +146,13 @@ class UsuarioForm(forms.ModelForm):
 
         return user
 
-
 class LoginForm(AuthenticationForm):
     username = forms.CharField(
+        label='Usuario',  # Etiqueta del campo
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Usuario'})
     )
     password = forms.CharField(
+        label='Contraseña',  # Etiqueta del campo
         widget=forms.PasswordInput(attrs={'class': 'form-control', 'placeholder': 'Contraseña'})
     )
 

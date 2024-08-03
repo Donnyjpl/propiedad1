@@ -10,65 +10,72 @@ from django.forms import inlineformset_factory
 from .forms import UsuarioUpdateForm, UsuarioForm, LoginForm, PropiedadForm, ImagenForm, PropiedadFilterForm
 from .models import Usuario, Comuna, Region, Propiedad, ImagenPropiedad, Direccion
 
-# Definición de un conjunto de formularios para las imágenes de la propiedad
+# Definición de un conjunto de formularios para las imágenes asociadas a una propiedad
 ImagenFormSet = inlineformset_factory(Propiedad, ImagenPropiedad, fields=['imagen', 'descripcion'], extra=5, can_delete=True)
 
 def index(request):
+    # Renderiza la página de inicio
     return render(request, 'index.html')
 
 def registro(request):
     if request.method == 'POST':
+        # Procesa el formulario de registro cuando se envía un POST
         form = UsuarioForm(request.POST)
         if form.is_valid():
-            form.save()
+            form.save()  # Guarda el nuevo usuario
             messages.success(request, 'Registro exitoso. Ahora puedes iniciar sesión.')
             return redirect('index')
     else:
-        form = UsuarioForm()
+        form = UsuarioForm()  # Muestra el formulario vacío si no es POST
     
     return render(request, 'registrar.html', {'form': form})
 
 def custom_login(request):
     if request.method == 'POST':
+        # Procesa el formulario de inicio de sesión cuando se envía un POST
         form = LoginForm(request.POST)
         if form.is_valid():
             username = form.cleaned_data['username']
             password = form.cleaned_data['password']
             user = authenticate(request, username=username, password=password)
             if user is not None:
-                login(request, user)
+                login(request, user)  # Inicia sesión al usuario
                 return redirect('perfil')
             else:
                 messages.error(request, 'Usuario o contraseña incorrectos.')
     else:
-        form = LoginForm()
+        form = LoginForm()  # Muestra el formulario vacío si no es POST
     
     return render(request, 'registration/login.html', {'form': form})
 
 @login_required
 def perfil(request):
+    # Renderiza la página de perfil del usuario autenticado
     return render(request, 'perfil.html', {'usuario': request.user})
 
 @login_required
 def modificar_perfil(request):
     usuario = request.user
     if request.method == 'POST':
+        # Procesa el formulario para actualizar el perfil del usuario
         form = UsuarioUpdateForm(request.POST, instance=usuario)
         if form.is_valid():
-            form.save()
+            form.save()  # Guarda los cambios del perfil
             messages.success(request, 'Perfil actualizado exitosamente.')
             return redirect('perfil')
     else:
-        form = UsuarioUpdateForm(instance=usuario)
+        form = UsuarioUpdateForm(instance=usuario)  # Muestra el formulario con los datos actuales
     
     return render(request, 'modificar_perfil.html', {'form': form})
 
 def formulario_view(request):
     regions = Region.objects.all()
+    # Renderiza un formulario para agregar propiedades, con la lista de regiones
     return render(request, 'form.html', {'regions': regions})
 
 def obtener_comunas(request):
     region_id = request.GET.get('region_id')
+    # Obtiene y retorna las comunas para una región específica en formato JSON
     comunas = Comuna.objects.filter(region_id=region_id).values('id', 'nombre')
     return JsonResponse(list(comunas), safe=False)
 
@@ -77,25 +84,23 @@ def agregar_propiedad(request):
     if request.method == 'POST':
         form = PropiedadForm(request.POST, request.FILES)
         formset = ImagenFormSet(request.POST, request.FILES)
-
+        
         if form.is_valid() and formset.is_valid():
             propiedad = form.save(commit=False)
             propiedad.arrendador = request.user
             propiedad.save()
 
-            # Crear y guardar la dirección
+            # Crear y guardar la dirección asociada a la propiedad
             direccion = Direccion.objects.create(
                 comuna=form.cleaned_data['comuna'],
                 calle=form.cleaned_data['direccion_calle'],
                 numero=form.cleaned_data['direccion_numero'],
                 punto_referencia=form.cleaned_data.get('direccion_punto_referencia', '')
             )
-
-            # Asociar la dirección con la propiedad
             propiedad.direccion = direccion
             propiedad.save()
 
-            # Guardar las imágenes
+            # Guardar las imágenes asociadas a la propiedad
             for imagen_form in formset:
                 if imagen_form.cleaned_data.get('imagen'):
                     ImagenPropiedad.objects.create(
@@ -112,7 +117,6 @@ def agregar_propiedad(request):
 
     return render(request, 'propiedad/agregar.html', {'form': form, 'formset': formset})
 
-
 class PropiedadUpdateView(UpdateView):
     model = Propiedad
     form_class = PropiedadForm
@@ -120,13 +124,16 @@ class PropiedadUpdateView(UpdateView):
     success_url = reverse_lazy('listar')
 
     def get_object(self, queryset=None):
+        # Obtiene la propiedad que se va a actualizar
         return get_object_or_404(Propiedad, id=self.kwargs.get("pk"))
 
     def get_context_data(self, **kwargs):
         data = super().get_context_data(**kwargs)
         if self.request.POST:
+            # Maneja el formulario de imágenes si se ha enviado una solicitud POST
             data['formset'] = ImagenFormSet(self.request.POST, self.request.FILES, instance=self.object)
         else:
+            # Muestra el formulario de imágenes si no se ha enviado una solicitud POST
             data['formset'] = ImagenFormSet(instance=self.object)
         return data
 
@@ -136,7 +143,7 @@ class PropiedadUpdateView(UpdateView):
         if formset.is_valid():
             self.object = form.save()
             formset.instance = self.object
-            formset.save()
+            formset.save()  # Guarda las imágenes asociadas
             messages.success(self.request, 'Propiedad actualizada exitosamente.')
             return super().form_valid(form)
         else:
@@ -147,10 +154,11 @@ def borrar_propiedad(request, propiedad_id):
     propiedad = get_object_or_404(Propiedad, id=propiedad_id)
     
     if propiedad.arrendador != request.user:
+        # Impide que un usuario no autorizado elimine la propiedad
         return HttpResponseForbidden("No tienes permiso para eliminar esta propiedad.")
     
     if request.method == 'POST':
-        propiedad.delete()
+        propiedad.delete()  # Elimina la propiedad
         messages.success(request, 'Propiedad eliminada exitosamente.')
         return redirect('listar')
 
@@ -160,10 +168,11 @@ def borrar_propiedad(request, propiedad_id):
 def listar_propiedades_usuario(request):
     usuario = request.user
     if usuario.tipo_usuario != 'arrendador':
+        # Impide que usuarios no arrendadores accedan a esta vista
         return HttpResponseForbidden("No tienes permiso para acceder a esta página.")
     
     propiedades = Propiedad.objects.filter(arrendador=usuario)
-    paginator = Paginator(propiedades, 9)  # Muestra 9 propiedades por página
+    paginator = Paginator(propiedades, 9)  # Paginación: 9 propiedades por página
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
@@ -176,6 +185,7 @@ def listar_propiedades_usuario(request):
 def detalle_propiedad(request, propiedad_id):
     propiedad = get_object_or_404(Propiedad, pk=propiedad_id)
     imagenes = ImagenPropiedad.objects.filter(propiedad=propiedad)
+    # Muestra los detalles de una propiedad y sus imágenes asociadas
     return render(request, 'propiedad/detalle_propiedad.html', {'propiedad': propiedad, 'imagenes': imagenes})
 
 def listar_propiedades(request):
@@ -183,6 +193,7 @@ def listar_propiedades(request):
     propiedades = Propiedad.objects.all()
 
     if form.is_valid():
+        # Aplica filtros a las propiedades según los datos del formulario
         if form.cleaned_data['region']:
             propiedades = propiedades.filter(direccion__comuna__region=form.cleaned_data['region'])
         if form.cleaned_data['comuna']:
@@ -199,7 +210,7 @@ def listar_propiedades(request):
             propiedades = propiedades.filter(m2_terreno__lte=form.cleaned_data['m2_terreno_max'])
 
     total_propiedades = propiedades.count()
-    paginator = Paginator(propiedades, 8)  # Muestra 8 propiedades por página
+    paginator = Paginator(propiedades, 8)  # Paginación: 8 propiedades por página
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
